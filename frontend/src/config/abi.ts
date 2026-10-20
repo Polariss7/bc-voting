@@ -41,4 +41,3 @@ export const secureVoteAbi = [
   "event VoteRevealed(uint256 indexed electionId, address indexed voter, uint256 indexed candidateId)",
   "event ElectionFinalized(uint256 indexed electionId, uint256 totalRevealed, uint256 nonRevealed)",
 ] as const;
-

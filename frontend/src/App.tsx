@@ -105,14 +105,20 @@ function useWallet() {
       setStatus("unavailable");
       return;
     }
-    void sync().catch((err) => { setError(formatError(err)); setStatus("error"); });
+    void sync().catch((err) => {
+      setError(formatError(err));
+      setStatus("error");
+    });
     const accountsChanged = (accounts: unknown) => {
       setAddress(undefined);
       setProvider(undefined);
       setChainId(undefined);
       setError("");
       setStatus("checking");
-      void sync(accounts as string[]).catch((err) => { setError(formatError(err)); setStatus("error"); });
+      void sync(accounts as string[]).catch((err) => {
+        setError(formatError(err));
+        setStatus("error");
+      });
     };
     const chainChanged = () => window.location.reload();
     injected.on?.("accountsChanged", accountsChanged);
@@ -263,7 +269,10 @@ function AppShell({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
             path="/elections/:id"
             element={
               <RequireMetaMask wallet={wallet}>
-                <ElectionPage key={`${location.pathname}:${wallet.address}`} wallet={wallet} />
+                <ElectionPage
+                  key={`${location.pathname}:${wallet.address}`}
+                  wallet={wallet}
+                />
               </RequireMetaMask>
             }
           />
@@ -279,7 +288,11 @@ function AppShell({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
             path="/audit/:id"
             element={
               <RequireMetaMask wallet={wallet}>
-                <ElectionPage key={`${location.pathname}:${wallet.address}`} wallet={wallet} auditOnly />
+                <ElectionPage
+                  key={`${location.pathname}:${wallet.address}`}
+                  wallet={wallet}
+                  auditOnly
+                />
               </RequireMetaMask>
             }
           />
@@ -1169,7 +1182,9 @@ function ElectionPage({
     try {
       const contract = getContract(provider);
       const [rawElection, rawCandidates, block] = await Promise.all([
-        contract!.getElection(id), contract!.getCandidates(id), provider.getBlock("latest"),
+        contract!.getElection(id),
+        contract!.getCandidates(id),
+        provider.getBlock("latest"),
       ]);
       if (block) setChainTime(block.timestamp);
       const electionValue = toElection(rawElection);
@@ -1203,40 +1218,48 @@ function ElectionPage({
       setState("ready");
       setError("");
       try {
-      const eventFilters = [
-        contract!.filters.ElectionCreated(id),
-        contract!.filters.VoteCommitted(id),
-        contract!.filters.VoteRevealed(id),
-        contract!.filters.ElectionFinalized(id),
-      ];
-      const eventLabels = [
-        "Election created",
-        "Vote committed",
-        "Vote revealed",
-        "Election finalized",
-      ];
-      const eventValues: { label: string; hash: string; block: number }[] = [];
-      for (let i = 0; i < eventFilters.length; i += 1) {
-        const latest = block?.number ?? await provider.getBlockNumber();
-        const from = Math.max(appConfig.deploymentBlock, latest - 2000, 0);
-        const logs = await contract!.queryFilter(eventFilters[i], from, latest);
-        for (const log of logs)
-          eventValues.push({
-            label: eventLabels[i],
-            hash: log.transactionHash,
-            block: log.blockNumber,
-          });
-      }
-      setEvents(eventValues.sort((a, b) => b.block - a.block));
-      setAuditError("");
+        const eventFilters = [
+          contract!.filters.ElectionCreated(id),
+          contract!.filters.VoteCommitted(id),
+          contract!.filters.VoteRevealed(id),
+          contract!.filters.ElectionFinalized(id),
+        ];
+        const eventLabels = [
+          "Election created",
+          "Vote committed",
+          "Vote revealed",
+          "Election finalized",
+        ];
+        const eventValues: { label: string; hash: string; block: number }[] =
+          [];
+        for (let i = 0; i < eventFilters.length; i += 1) {
+          const latest = block?.number ?? (await provider.getBlockNumber());
+          const from = Math.max(appConfig.deploymentBlock, latest - 2000, 0);
+          const logs = await contract!.queryFilter(
+            eventFilters[i],
+            from,
+            latest,
+          );
+          for (const log of logs)
+            eventValues.push({
+              label: eventLabels[i],
+              hash: log.transactionHash,
+              block: log.blockNumber,
+            });
+        }
+        setEvents(eventValues.sort((a, b) => b.block - a.block));
+        setAuditError("");
       } catch (err) {
-        setAuditError(`Recent activity could not be loaded: ${formatError(err)}`);
+        setAuditError(
+          `Recent activity could not be loaded: ${formatError(err)}`,
+        );
       }
     } catch (err) {
       setError(formatError(err));
       setState("error");
+    } finally {
+      loading.current = false;
     }
-    finally { loading.current = false; }
   }, [id, provider, wallet.address]);
 
   useEffect(() => {
@@ -1311,14 +1334,26 @@ function ElectionPage({
   };
 
   const commit = async () => {
-    if (!id || !receipt || !backedUp || receipt.candidateId !== selectedCandidate) return;
+    if (
+      !id ||
+      !receipt ||
+      !backedUp ||
+      receipt.candidateId !== selectedCandidate
+    )
+      return;
     try {
       if (saveLocally) saveReceipt(receipt);
     } catch {
-      setTx({ status: "error", message: "Browser storage is unavailable. Keep your downloaded receipt and uncheck local recovery to continue." });
+      setTx({
+        status: "error",
+        message:
+          "Browser storage is unavailable. Keep your downloaded receipt and uncheck local recovery to continue.",
+      });
       return;
     }
-    await runTransaction("Commit ballot", (contract) => contract.commitVote(id, receipt.commitment));
+    await runTransaction("Commit ballot", (contract) =>
+      contract.commitVote(id, receipt.commitment),
+    );
   };
 
   const reveal = async () => {
@@ -1329,20 +1364,30 @@ function ElectionPage({
   };
 
   const phase = election ? phaseOf(election, chainTime) : "scheduled";
-  const computedCommitment = commitmentFor(id || "", wallet.address || "", selectedCandidate, secret);
+  const computedCommitment = commitmentFor(
+    id || "",
+    wallet.address || "",
+    selectedCandidate,
+    secret,
+  );
   const importReceipt = async (file?: File) => {
     if (!file || !id || !wallet.address) return;
     try {
       if (file.size > 16384) throw new Error("Receipt file is too large.");
       const imported = parseReceipt(await file.text(), id, wallet.address);
-      if (status?.committed && imported.commitment.toLowerCase() !== status.commitment.toLowerCase()) {
+      if (
+        status?.committed &&
+        imported.commitment.toLowerCase() !== status.commitment.toLowerCase()
+      ) {
         throw new Error("This receipt does not match your on-chain ballot.");
       }
       setReceipt(imported);
       setSelectedCandidate(imported.candidateId);
       setSecret(imported.secret);
       setTx({ status: "idle" });
-    } catch (err) { setTx({ status: "error", message: formatError(err) }); }
+    } catch (err) {
+      setTx({ status: "error", message: formatError(err) });
+    }
   };
   const matches = Boolean(
     status?.commitment &&
@@ -1376,7 +1421,12 @@ function ElectionPage({
         <StatusBadge phase={phase} />
       </div>
       <PhaseRail phase={phase} />
-      <p className="helper-copy">Updates every 10 seconds from the blockchain. <button className="text-action" onClick={() => void load()}>Refresh now</button></p>
+      <p className="helper-copy">
+        Updates every 10 seconds from the blockchain.{" "}
+        <button className="text-action" onClick={() => void load()}>
+          Refresh now
+        </button>
+      </p>
       <div className="detail-grid">
         <div className="detail-main">
           <section className="section-panel">
@@ -1480,16 +1530,30 @@ function ElectionPage({
                           />{" "}
                           Save a local recovery copy
                         </label>
-                        <button className="text-action" onClick={() => downloadReceipt(receipt)}>
+                        <button
+                          className="text-action"
+                          onClick={() => downloadReceipt(receipt)}
+                        >
                           Download private receipt
                         </button>
                         <label className="check-row">
-                          <input type="checkbox" checked={backedUp} onChange={(event) => setBackedUp(event.target.checked)} />
-                          I downloaded my receipt and will return during the reveal window.
+                          <input
+                            type="checkbox"
+                            checked={backedUp}
+                            onChange={(event) =>
+                              setBackedUp(event.target.checked)
+                            }
+                          />
+                          I downloaded my receipt and will return during the
+                          reveal window.
                         </label>
                         <button
                           className="primary-action"
-                          disabled={!backedUp || receipt.candidateId !== selectedCandidate || tx.status === "pending"}
+                          disabled={
+                            !backedUp ||
+                            receipt.candidateId !== selectedCandidate ||
+                            tx.status === "pending"
+                          }
                           onClick={() => void commit()}
                         >
                           Commit ballot <ArrowRight size={16} />
@@ -1508,9 +1572,17 @@ function ElectionPage({
                       Load the same candidate and secret used during commitment.
                       The computed hash must match the chain.
                     </p>
-                    <label className="helper-copy">Import your private receipt JSON
-                      <input type="file" accept=".json,application/json" disabled={tx.status === "pending"}
-                        onChange={(event) => { void importReceipt(event.target.files?.[0]); event.target.value = ""; }} />
+                    <label className="helper-copy">
+                      Import your private receipt JSON
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        disabled={tx.status === "pending"}
+                        onChange={(event) => {
+                          void importReceipt(event.target.files?.[0]);
+                          event.target.value = "";
+                        }}
+                      />
                     </label>
                     <div className="reveal-controls">
                       <select
@@ -1569,13 +1641,25 @@ function ElectionPage({
                   </div>
                 )}
               {status?.committed && !status.revealed && phase === "commit" && (
-                <StateNotice title="Ballot committed — one more step remains"
-                  copy={`Return after ${formatTime(election.commitEnd)} and reveal before ${formatTime(election.revealEnd)}. Your vote is counted only after reveal.`} />
+                <StateNotice
+                  title="Ballot committed — one more step remains"
+                  copy={`Return after ${formatTime(election.commitEnd)} and reveal before ${formatTime(election.revealEnd)}. Your vote is counted only after reveal.`}
+                />
               )}
-              {status?.committed && !status.revealed && (phase === "ready" || phase === "finalized") && (
-                <StateNotice title="Reveal deadline missed" copy="This commitment was not revealed and is excluded from the result." />
+              {status?.committed &&
+                !status.revealed &&
+                (phase === "ready" || phase === "finalized") && (
+                  <StateNotice
+                    title="Reveal deadline missed"
+                    copy="This commitment was not revealed and is excluded from the result."
+                  />
+                )}
+              {phase === "scheduled" && (
+                <StateNotice
+                  title="Registration is open"
+                  copy={`Ask the administrator to register your wallet before ${formatTime(election.commitStart)}.`}
+                />
               )}
-              {phase === "scheduled" && <StateNotice title="Registration is open" copy={`Ask the administrator to register your wallet before ${formatTime(election.commitStart)}.`} />}
               {wallet.address && status?.revealed && (
                 <StateNotice
                   title="Your ballot is revealed"
@@ -1616,11 +1700,18 @@ function ElectionPage({
                 </span>
               </div>
               <p className="helper-copy">
-                {election.totalRevealed === 0n ? "No votes were revealed. There is no winner." : (() => {
-                  const highest = results.reduce((max, row) => row.votes > max ? row.votes : max, 0n);
-                  const winners = results.filter((row) => row.votes === highest);
-                  return `${winners.length > 1 ? "Tie" : "Winner"}: ${winners.map((row) => row.name).join(", ")}`;
-                })()}
+                {election.totalRevealed === 0n
+                  ? "No votes were revealed. There is no winner."
+                  : (() => {
+                      const highest = results.reduce(
+                        (max, row) => (row.votes > max ? row.votes : max),
+                        0n,
+                      );
+                      const winners = results.filter(
+                        (row) => row.votes === highest,
+                      );
+                      return `${winners.length > 1 ? "Tie" : "Winner"}: ${winners.map((row) => row.name).join(", ")}`;
+                    })()}
               </p>
               <div className="results-list">
                 {results.map((result) => (
@@ -1669,10 +1760,16 @@ function ElectionPage({
               Ethereum.
             </p>
           </section>
-          {auditError && <p role="status" className="helper-copy">{auditError} Voting remains available. Retry with Refresh now.</p>}
+          {auditError && (
+            <p role="status" className="helper-copy">
+              {auditError} Voting remains available. Retry with Refresh now.
+            </p>
+          )}
           {events.length > 0 && (
             <section className="aside-panel">
-              <p className="eyebrow">Recent chain activity (last 2,000 blocks)</p>
+              <p className="eyebrow">
+                Recent chain activity (last 2,000 blocks)
+              </p>
               <div className="event-list">
                 {events.map((event) =>
                   appConfig.explorerUrl ? (
@@ -1800,10 +1897,24 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
       });
       return;
     }
-    const offsets = [scheduleMinutes.start, scheduleMinutes.commit, scheduleMinutes.reveal].map(Number);
-    if (offsets.some((value) => !Number.isSafeInteger(value) || value <= 0 || value > 525600)
-        || offsets[0] >= offsets[1] || offsets[1] >= offsets[2] || rows.length > 20) {
-      setTx({ status: "error", message: "Use 1–20 candidates and increasing whole-minute deadlines: start < commit end < reveal end (maximum one year)." });
+    const offsets = [
+      scheduleMinutes.start,
+      scheduleMinutes.commit,
+      scheduleMinutes.reveal,
+    ].map(Number);
+    if (
+      offsets.some(
+        (value) => !Number.isSafeInteger(value) || value <= 0 || value > 525600,
+      ) ||
+      offsets[0] >= offsets[1] ||
+      offsets[1] >= offsets[2] ||
+      rows.length > 20
+    ) {
+      setTx({
+        status: "error",
+        message:
+          "Use 1–20 candidates and increasing whole-minute deadlines: start < commit end < reveal end (maximum one year).",
+      });
       return;
     }
     const now = Math.floor(Date.now() / 1000);
@@ -1831,8 +1942,11 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
       for (const log of mined.logs) {
         try {
           const event = contract!.interface.parseLog(log);
-          if (event?.name === "ElectionCreated") setElectionId(event.args.electionId.toString());
-        } catch { /* Other contract events are not election IDs. */ }
+          if (event?.name === "ElectionCreated")
+            setElectionId(event.args.electionId.toString());
+        } catch {
+          /* Other contract events are not election IDs. */
+        }
       }
       setTx({
         status: "success",
@@ -1864,10 +1978,24 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
       });
       return;
     }
-    const list = [...new Map(voters.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean)
-      .map((value) => [value.toLowerCase(), value])).values()];
-    if (!/^[1-9]\d*$/.test(electionId) || list.length === 0 || list.length > 200) {
-      setTx({ status: "error", message: "Enter a valid election ID and 1–200 unique wallet addresses." });
+    const list = [
+      ...new Map(
+        voters
+          .split(/[\s,]+/)
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .map((value) => [value.toLowerCase(), value]),
+      ).values(),
+    ];
+    if (
+      !/^[1-9]\d*$/.test(electionId) ||
+      list.length === 0 ||
+      list.length > 200
+    ) {
+      setTx({
+        status: "error",
+        message: "Enter a valid election ID and 1–200 unique wallet addresses.",
+      });
       return;
     }
     if (!list.every((value) => ethers.isAddress(value))) {
@@ -1971,7 +2099,11 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
               placeholder="Candidate name | manifesto"
             />
           </label>
-          <p className="helper-copy">All deadlines are minutes from creation. Register every wallet before voting starts; registration then closes. Defaults: 30 minutes to register, 60 to commit, 60 to reveal.</p>
+          <p className="helper-copy">
+            All deadlines are minutes from creation. Register every wallet
+            before voting starts; registration then closes. Defaults: 30 minutes
+            to register, 60 to commit, 60 to reveal.
+          </p>
           <div className="three-fields">
             <label>
               Start in minutes
@@ -2031,8 +2163,13 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
               <h2>Register wallets</h2>
             </div>
           </div>
-          <p className="helper-copy">After creation, the new election ID is selected below. Register your own wallet too if you want to vote.</p>
-          <Link className="text-action" to={`/elections/${electionId}`}>Open election / share its URL</Link>
+          <p className="helper-copy">
+            After creation, the new election ID is selected below. Register your
+            own wallet too if you want to vote.
+          </p>
+          <Link className="text-action" to={`/elections/${electionId}`}>
+            Open election / share its URL
+          </Link>
           <label>
             Election ID
             <input
@@ -2051,7 +2188,11 @@ function Admin({ wallet }: { wallet: ReturnType<typeof useWallet> }) {
               placeholder="0x…"
             />
           </label>
-          <button className="primary-action" disabled={tx.status === "pending"} onClick={() => void register()}>
+          <button
+            className="primary-action"
+            disabled={tx.status === "pending"}
+            onClick={() => void register()}
+          >
             Register voters <ShieldCheck size={16} />
           </button>
           <div className="security-note">
@@ -2142,4 +2283,3 @@ function EmptyState({ title, copy }: { title: string; copy: string }) {
 }
 
 export default App;
-

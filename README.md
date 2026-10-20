@@ -224,4 +224,3 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) before opening a pull request. Contribu
 ## License
 
 This project is released under the MIT License. See [`LICENSE`](LICENSE).
-

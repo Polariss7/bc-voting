@@ -34,11 +34,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Generate formatting patch
-        run: |
-          npm exec prettier -- --write README.md package.json frontend/src scripts docs hardhat.config.ts vite.config.ts eslint.config.mjs
-          git diff -- README.md package.json frontend/src scripts docs hardhat.config.ts vite.config.ts eslint.config.mjs
-
       - name: Check formatting
         run: npm run format:check
 
