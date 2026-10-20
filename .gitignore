@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+.vite
+.deck-build
+presentation-output
+premium-audit.json
+premium-ui.json
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+artifacts
+cache
+typechain-types
+frontend/src/config/deployments/*.json
